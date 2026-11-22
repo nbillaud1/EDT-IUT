@@ -11,4 +11,7 @@ Fiche validée : `docs/FICHE.md` (2026-11-22). Maquette de référence : `maquet
 - Mise en ligne uniquement avec accord explicite
 
 ## Décisions déléguées
-- (aucune pour l'instant)
+- 2026-11-22 : données de secours commitées (`site/data.json`) + `tools/maj.ps1`, car le serveur de l'IUT bloque les machines de GitHub ; workflow en 2 jobs.
+
+## En ligne
+- https://github.com/nbillaud1/EDT-IUT · https://nbillaud1.github.io/EDT-IUT/
