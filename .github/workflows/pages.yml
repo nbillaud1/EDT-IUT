@@ -29,8 +29,10 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python tests/test_edt.py
-      # Si le site de l'IUT ne répond pas, le script échoue et la version en ligne reste la précédente.
-      - run: python tools/edt.py site
+      # Le serveur de l'IUT ne répond pas toujours aux machines de GitHub (constaté le 2026-11-22) :
+      # en cas d'échec on garde site/data.json du dépôt, mis à jour depuis un PC (tools/maj.ps1).
+      - run: python tools/edt.py "$RUNNER_TEMP/out" && cp "$RUNNER_TEMP/out/data.json" site/data.json
+        continue-on-error: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
