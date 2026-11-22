@@ -18,7 +18,8 @@ Une page, en mots simples. Rien n'est construit avant validation.
   - choisir jour + heure de début + heure de fin → liste des salles libres sur tout le créneau ;
   - bouton « Maintenant » (aujourd'hui, heure actuelle → +1 h 30) ;
   - pour chaque salle libre : « libre jusqu'à HHhMM ».
-- Plus tard : changer de semaine ; vue grille salles × heures
+- Ajouté le 2026-11-22 à ta demande : changer de semaine (‹ ›, « Maintenant » revient à la semaine en cours)
+- Plus tard : vue grille salles × heures
 - Hors périmètre : réserver une salle ; EDT des autres départements ; comptes utilisateurs
 
 ## 3. Comment
@@ -39,7 +40,7 @@ Une page, en mots simples. Rien n'est construit avant validation.
 | Liste des salles | toutes les salles vues dans les 39 PDF | hypothèse à confirmer (sûr) |
 | Fréquence de mise à jour | toutes les 2 h | hypothèse à confirmer (probable) |
 
-Modifications après validation : 2026-11-22, style retravaillé (moins générique) et heures par pas de 30 min, à ta demande pendant la maquette
+Modifications après validation : 2026-11-22, style retravaillé (moins générique) et heures par pas de 30 min, à ta demande pendant la maquette ; 2026-11-22, ajout du changement de semaine et dépôt nommé « EDT-IUT », à ta demande
 
 ## 5. Suite
 - Prochaine étape et coût : maquette HTML cliquable faite par moi (pas d'agent), données fictives

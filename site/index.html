@@ -30,7 +30,11 @@ main { max-width: 560px; margin: 0 auto; }
 button, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
+.weeknav { display: flex; align-items: center; gap: 8px; }
 .week { margin: 0; color: var(--dim); font-size: .95rem; }
+.week.other { color: var(--amber); }
+.weeknav button { flex: none; width: 32px; height: 32px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: var(--chalk); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.weeknav button:disabled { opacity: .3; cursor: default; }
 .slot { margin: 2px 0 0; font-family: var(--sign); font-weight: 600; font-size: clamp(2.1rem, 9vw, 2.8rem); line-height: 1.05; text-wrap: balance; }
 .slot .t { color: var(--amber); font-variant-numeric: tabular-nums; }
 .note { margin: 6px 0 0; font-size: .85rem; color: var(--dim); }
@@ -76,7 +80,7 @@ li { display: grid; grid-template-columns: 4.2rem 1fr; gap: 2px 14px; align-item
 .card { background: var(--slate); border-radius: 8px; border-top: 3px solid var(--free); padding: 10px 12px 12px; display: grid; gap: 2px; }
 .card .num { grid-row: auto; font-size: 2.2rem; }
 .card .until { font-size: .85rem; color: var(--dim); }
-.card .until b { display: block; font-size: 1.25rem; }
+.card .until b { display: block; font-size: 1.2rem; white-space: nowrap; }
 
 footer { margin-top: 32px; color: var(--dim); font-size: .85rem; display: grid; gap: 6px; }
 footer p { margin: 0; max-width: 60ch; }
@@ -86,7 +90,11 @@ footer a { color: inherit; }
 <body>
 <main>
   <header>
-    <p class="week" id="week">Chargement des emplois du temps…</p>
+    <div class="weeknav">
+      <button type="button" id="prev" aria-label="Semaine précédente" hidden>‹</button>
+      <p class="week" id="week">Chargement des emplois du temps…</p>
+      <button type="button" id="next" aria-label="Semaine suivante" hidden>›</button>
+    </div>
     <h1 class="slot" id="slot">Salles libres</h1>
     <p class="note" id="note" hidden></p>
   </header>
@@ -127,7 +135,7 @@ const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","aoû
 const OPEN = 8 * 60, CLOSE = 19 * 60 + 30, SPAN = CLOSE - OPEN;
 const fmt = m => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
 const $ = id => document.getElementById(id);
-let data, week, day, days;
+let data, week, wi, currentWi, day = 0, days;
 
 // Date et heure à Paris, quel que soit le fuseau du téléphone.
 function parisNow() {
@@ -176,7 +184,25 @@ function render() {
   $("unknown").textContent = n ? `${n} cours ce jour-là n'indiquent pas de salle, ils ne sont pas comptés.` : "";
 }
 
+function setWeek(i) {
+  wi = i; week = data.weeks[i];
+  days = [0, 1, 2, 3, 4].concat(week.busy.SAMEDI ? [5] : []);
+  const a = frDate(week.start), b = frDate(week.end), current = i === currentWi;
+  $("week").textContent = `Semaine ${week.num}, du ${a.d}${a.m !== b.m ? " " + a.m : ""} au ${b.d} ${b.m}${current ? "" : " (pas la semaine en cours)"}`;
+  $("week").classList.toggle("other", !current);
+  $("prev").disabled = i === 0; $("next").disabled = i === data.weeks.length - 1;
+  $("days").innerHTML = "";
+  days.forEach(d => {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.textContent = DAY_NAMES[d].slice(0, 3); btn.dataset.i = d; btn.setAttribute("aria-label", DAY_NAMES[d]);
+    btn.onclick = () => { day = d; $("note").hidden = true; render(); };
+    $("days").append(btn);
+  });
+  if (!days.includes(day)) day = days[0];
+}
+
 function setNow() {
+  if (wi !== currentWi) setWeek(currentWi);
   const now = parisNow();
   let d = now.wd, start = Math.max(OPEN, Math.floor(now.min / 30) * 30), note = "";
   const inWeek = week.start <= now.iso && now.iso <= week.end;
@@ -209,16 +235,12 @@ async function start() {
     $("week").textContent = "Impossible de charger les emplois du temps. Vérifie ta connexion puis recharge la page.";
     return;
   }
-  week = pickWeek(data.weeks, parisNow().iso);
-  days = [0, 1, 2, 3, 4].concat(week.busy.SAMEDI ? [5] : []);
-  const a = frDate(week.start), b = frDate(week.end);
-  $("week").textContent = `Semaine ${week.num}, du ${a.d}${a.m !== b.m ? " " + a.m : ""} au ${b.d} ${b.m}`;
-  days.forEach(i => {
-    const btn = document.createElement("button");
-    btn.type = "button"; btn.textContent = DAY_NAMES[i].slice(0, 3); btn.dataset.i = i; btn.setAttribute("aria-label", DAY_NAMES[i]);
-    btn.onclick = () => { day = i; $("note").hidden = true; render(); };
-    $("days").append(btn);
-  });
+  currentWi = data.weeks.indexOf(pickWeek(data.weeks, parisNow().iso));
+  setWeek(currentWi);
+  const step = k => { setWeek(wi + k); $("note").hidden = true; render(); };
+  $("prev").onclick = () => step(-1);
+  $("next").onclick = () => step(1);
+  $("prev").hidden = $("next").hidden = false;
   for (let m = OPEN; m <= CLOSE; m += 30) { $("from").add(new Option(fmt(m), m)); $("to").add(new Option(fmt(m), m)); }
   $("updated").textContent = `Emplois du temps A1, A2 et A3 lus ${ago(data.generated)}.`;
   ["from", "to"].forEach(id => $(id).addEventListener("change", () => { $("note").hidden = true; render(); }));
