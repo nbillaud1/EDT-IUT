@@ -154,7 +154,16 @@ if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "site")
     out.mkdir(parents=True, exist_ok=True)
     data = build()
-    (out / "data.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    path = out / "data.json"
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = {}
+    same = {k: v for k, v in old.items() if k != "generated"} == {k: v for k, v in data.items() if k != "generated"}
+    if same:
+        print("emplois du temps inchangés, fichier conservé")  # évite un commit quotidien pour rien
+    else:
+        path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(data['weeks'])} semaines, {len(data['rooms'])} salles, {len(data['errors'])} erreurs")
     for e in data["errors"]:
         print("  !", e)

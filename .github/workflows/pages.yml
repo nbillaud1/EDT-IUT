@@ -1,8 +1,8 @@
 name: Mettre à jour les salles libres
 
+# Déploie à chaque push (les données arrivent par tools/maj.ps1 depuis le PC).
+# Pas de cron : le serveur de l'IUT ne répond pas aux machines de GitHub.
 on:
-  schedule:
-    - cron: "0 */2 * * *"   # toutes les 2 h (heure UTC)
   workflow_dispatch:
   push:
     branches: [main]

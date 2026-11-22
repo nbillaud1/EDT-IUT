@@ -242,7 +242,7 @@ async function start() {
   $("next").onclick = () => step(1);
   $("prev").hidden = $("next").hidden = false;
   for (let m = OPEN; m <= CLOSE; m += 30) { $("from").add(new Option(fmt(m), m)); $("to").add(new Option(fmt(m), m)); }
-  $("updated").textContent = `Emplois du temps A1, A2 et A3 lus ${ago(data.generated)}.`;
+  $("updated").textContent = `Emplois du temps A1, A2 et A3 : dernier changement pris en compte ${ago(data.generated)}.`;
   ["from", "to"].forEach(id => $(id).addEventListener("change", () => { $("note").hidden = true; render(); }));
   $("now").addEventListener("click", setNow);
   $("f").addEventListener("submit", e => e.preventDefault());
