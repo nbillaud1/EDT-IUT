@@ -15,3 +15,4 @@ Fiche validée : `docs/FICHE.md` (2026-11-22). Maquette de référence : `maquet
 
 ## En ligne
 - https://github.com/nbillaud1/EDT-IUT · https://nbillaud1.github.io/EDT-IUT/
+- Mise à jour : tâche planifiée Windows « EDT-IUT mise a jour » (7h30 et 12h30) jusqu'au 2027-06-30 ; arrêt anticipé : `Unregister-ScheduledTask -TaskName "EDT-IUT mise a jour"`.

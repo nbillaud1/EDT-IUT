@@ -20,7 +20,7 @@ Mis à jour : 2026-11-22
 - Workflow en 2 jobs (build, deploy) : le déploiement en un seul job ne trouvait pas l'artefact.
 
 ## Suite
-1. Décision utilisateur : automatiser `tools/maj.ps1` (tâche planifiée Windows) ou le lancer à la main.
+1. (fait 2026-11-22, accord utilisateur) Tâche planifiée Windows « EDT-IUT mise a jour » : `tools/maj.ps1` chaque jour à 7h30 et 12h30 (rattrapée si PC éteint), fin le 2027-06-30, auto-suppression le lendemain. Le site reste en ligne après. Journal : `tools/maj.log`. Essai manuel : résultat 0, « aucun changement ». Cron GitHub retiré (inutile).
 2. Vérifier « Maintenant » un jour de cours ; rendu sur vrai téléphone.
 
 ## Agents lancés
