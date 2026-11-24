@@ -31,4 +31,18 @@ assert ("JEUDI", 810, 900, "R47") in ev          # R3.10 de 13h30 à 15h00
 assert ("JEUDI", 900, 1020, "105") in ev         # R3.14 de 15h00 à 17h00
 assert ("MARDI", 480, 600, None) in ev           # R3.04 salle « . »
 assert ("VENDREDI", 930, 1050, "111") in ev
+# Calendrier .ics (source principale depuis le 2026-11-24) : groupe G7, semaine 12.
+w = edt.parse_ics((Path(__file__).parent / "fixtures" / "G7_S12.ics").read_text(encoding="utf-8"), 12)
+assert (w["num"], w["start"], w["end"]) == (12, "2026-11-23", "2026-11-28"), w
+ev = {(d, s, e, r) for d, s, e, r, _ in w["events"]}
+assert len(w["events"]) == 24, len(w["events"])
+assert ("MARDI", 810, 1050, "208") in ev        # SAE libre G7A, 13h30-17h30
+assert ("MARDI", 540, 630, "AC") in ev          # Anglais 9h00-10h30
+assert ("LUNDI", 480, 600, "103") in ev
+# Fuseau non prévu -> erreur (rien n'est publié) plutôt qu'un horaire décalé.
+try:
+    edt.parse_ics("BEGIN:VEVENT\nDTSTART:20261123T080000Z\nDTEND:20261123T100000Z\nLOCATION:103\nEND:VEVENT\n", 1)
+    raise AssertionError("heure UTC acceptée")
+except ValueError:
+    pass
 print("ok")

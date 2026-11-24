@@ -1,4 +1,4 @@
-"""Lit les PDF d'emploi du temps A1/A2/A3 et écrit site/data.json (salles occupées par semaine et par jour).
+"""Lit les emplois du temps A1/A2/A3 (calendriers .ics des groupes, PDF en secours) et écrit site/data.json (salles occupées par semaine et par jour).
 
 Usage : python tools/edt.py [dossier_de_sortie]   (défaut : site/)
 Seule dépendance : pypdf.
@@ -149,26 +149,75 @@ def parse_pdf(data):
     return {"num": int(header.group(1)), "start": fmt(header.group(3)), "end": fmt(header.group(4)), "events": events}
 
 
+def parse_ics(text, num):
+    """Calendrier .ics d'un groupe pour une semaine -> même forme que parse_pdf (None si la semaine est vide)."""
+    from datetime import date, timedelta
+    text = text.replace("\r\n", "\n").replace("\n ", "").replace("\n\t", "")  # lignes repliées (RFC 5545)
+    events, monday = [], None
+    for block in re.findall(r"BEGIN:VEVENT\n(.*?)END:VEVENT", text, re.S):
+        f = {}
+        for line in block.split("\n"):
+            if ":" in line:
+                k, v = line.split(":", 1)
+                f[k.split(";")[0]] = (k, v)
+        if f.get("STATUS", ("", ""))[1].strip().upper() == "CANCELLED":
+            continue
+        times = []
+        for key in ("DTSTART", "DTEND"):
+            k, v = f.get(key, ("", ""))
+            m = re.fullmatch(r"(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)\d\d", v.strip())
+            if not m or ("TZID=Europe/Paris" not in k):  # heure UTC ou autre fuseau : format non prévu
+                raise ValueError(f"horaire illisible : {k}:{v}")
+            y, mo, d, hh, mm = map(int, m.groups())
+            times.append((date(y, mo, d), hh * 60 + mm))
+        (day, start), (_, end) = times
+        if day.weekday() > 5 or end <= start:
+            raise ValueError(f"cours mal placé : {f.get('SUMMARY', ('', '?'))[1]} le {day}")
+        mon = day - timedelta(days=day.weekday())
+        if monday and mon != monday:
+            raise ValueError("cours de plusieurs semaines dans le même fichier")
+        monday = mon
+        loc = f.get("LOCATION", ("", "."))[1].replace("\\,", ",").strip() or "."
+        for code in loc.split(","):
+            for room in split_rooms(code.strip()):
+                events.append((DAYS[day.weekday()], start, end, room, f.get("SUMMARY", ("", ""))[1].strip()))
+    if monday is None:
+        return None  # shortcut: semaine sans aucun cours (vacances) absente du site ; suffisant tant qu'on ne veut pas l'afficher vide
+    return {"num": num, "start": monday.isoformat(), "end": (monday + timedelta(days=5)).isoformat(), "events": events}
+
+
 def list_pdfs(promo):
     html = fetch(BASE + promo + "/").decode("utf-8", "replace")
     return sorted(set(re.findall(rf'href="({promo}_S\d+\.pdf)"', html)), key=lambda n: int(re.search(r"S(\d+)", n).group(1)))
 
 
-def build():
+def list_ics(promo):
+    """(chemin, numéro de semaine) des .ics des groupes entiers (G1, G4…) : ils contiennent aussi leurs demi-groupes."""
+    groups = sorted(set(re.findall(r'href="(G\d+)/"', fetch(BASE + promo + "/").decode("utf-8", "replace"))))
+    for g in groups:
+        for name in sorted(set(re.findall(rf'href="({g}_S(\d+)\.ics)"', fetch(f"{BASE}{promo}/{g}/").decode("utf-8", "replace")))):
+            yield f"{promo}/{g}/{name[0]}", int(name[1])
+
+
+def build(source="ics"):
     weeks, rooms, errors = {}, set(), []
     for promo in PROMOS:
-        for name in list_pdfs(promo):
+        files = list_ics(promo) if source == "ics" else ((f"{promo}/{n}", None) for n in list_pdfs(promo))
+        for path, num in files:
             try:
-                w = parse_pdf(fetch(BASE + promo + "/" + name))
-            except Exception as e:  # un PDF illisible ne doit pas bloquer les autres
-                errors.append(f"{name}: {e}")
+                raw = fetch(BASE + path)
+                w = parse_ics(raw.decode("utf-8"), num) if source == "ics" else parse_pdf(raw)
+            except Exception as e:  # on note l'erreur et on continue, pour toutes les lister ; rien ne sera publié
+                errors.append(f"{path}: {e}")
+                continue
+            if w is None:
                 continue
             wk = weeks.setdefault(w["start"], {"num": w["num"], "start": w["start"], "end": w["end"],
-                                               "busy": {}, "unknown": {}, "promos": []})
-            wk["promos"].append(promo)
-            for day, s, e, room, _ in w["events"]:
+                                               "busy": {}, "unknown": set(), "promos": set()})
+            wk["promos"].add(promo)
+            for day, s, e, room, what in w["events"]:
                 if room is None:
-                    wk["unknown"][day] = wk["unknown"].get(day, 0) + 1
+                    wk["unknown"].add((day, s, e, what))  # un CM sans salle apparaît dans chaque groupe : compté une fois
                     continue
                 rooms.add(room)
                 wk["busy"].setdefault(day, {}).setdefault(room, []).append([s, e])
@@ -176,8 +225,13 @@ def build():
         for day in wk["busy"].values():
             for r, slots in day.items():
                 day[r] = sorted(map(list, {tuple(x) for x in slots}))
+        unknown = {}
+        for day, *_ in wk["unknown"]:
+            unknown[day] = unknown.get(day, 0) + 1
+        wk["unknown"], wk["promos"] = unknown, sorted(wk["promos"])
     return {
         "generated": datetime.now(timezone.utc).isoformat(timespec="minutes"),
+        "source": source,
         "rooms": sorted(rooms, key=lambda r: (not r[0].isdigit(), r)),
         "weeks": [weeks[k] for k in sorted(weeks)],
         "errors": errors,
@@ -187,7 +241,12 @@ def build():
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "site")
     out.mkdir(parents=True, exist_ok=True)
-    data = build()
+    data = build("ics")
+    if data["errors"] or not data["weeks"]:
+        print("Calendriers .ics illisibles, lecture des PDF en secours :")
+        for e in data["errors"]:
+            print("  !", e)
+        data = build("pdf")
     if data["errors"] or not data["weeks"]:
         # Mise en page inattendue : on ne publie rien plutôt que des salles fausses ; le site garde l'ancienne version.
         print("ERREUR, rien n'est écrit :")
@@ -204,4 +263,4 @@ if __name__ == "__main__":
         print("emplois du temps inchangés, fichier conservé")  # évite un commit quotidien pour rien
     else:
         path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"{len(data['weeks'])} semaines, {len(data['rooms'])} salles")
+    print(f"{len(data['weeks'])} semaines, {len(data['rooms'])} salles (source : {data['source']})")

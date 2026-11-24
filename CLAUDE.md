@@ -6,7 +6,9 @@ Fiche validée : `docs/FICHE.md` (2026-11-22). Maquette de référence : `maquet
 ## Décisions (utilisateur, 2026-11-22)
 - Site en ligne, mobile d'abord, pour l'utilisateur + quelques amis
 - MVP : créneau → salles libres, bouton « Maintenant », « libre jusqu'à »
-- Python (lecture PDF) via GitHub Actions toutes les 2 h → JSON ; page statique sur GitHub Pages
+- Python → JSON ; page statique sur GitHub Pages
+- Source : calendriers .ics des groupes (G1…G8), PDF en secours (utilisateur, 2026-11-24)
+- Les SAE libres restent affichées comme occupées (utilisateur, 2026-11-24)
 - Style sombre : #0F172A / #1E293B / #E2E8F0 / libre #4ADE80 / occupé #475569 / accent #38BDF8
 - Mise en ligne uniquement avec accord explicite
 

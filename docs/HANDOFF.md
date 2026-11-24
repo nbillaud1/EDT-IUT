@@ -24,6 +24,11 @@ Mis à jour : 2026-11-22
 - Corrigé dans `tools/edt.py` (les deux mises en page sont lues) ; contrôles stricts : texte hors case, jour introuvable, horaire hors 8h-19h30 -> erreur, rien n'est écrit ni publié.
 - Test : `tests/fixtures/A2_S13_ics.pdf` ajouté. Vérifié à l'œil : A1 S13, A2 S13, A3 S12.
 
+## 2026-11-24 : source = calendriers .ics
+- L'utilisateur a choisi de lire les .ics (A1/G1…, A2/G4…, A3/G7… ; S3 à S15) ; PDF en secours si un .ics est illisible.
+- Comparaison .ics / PDF : 9 semaines identiques sur 13 ; les 4 autres : le PDF perdait des réservations (cases superposées, ex. Devoir R46/R47 en S14).
+- 208 mardi 13h30-17h30 = « SAE libre » G7A : bien réservée dans l'EDT ; l'utilisateur garde l'affichage « occupée ».
+
 ## Suite
 1. (fait 2026-11-22, accord utilisateur) Tâche planifiée Windows « EDT-IUT mise a jour » : `tools/maj.ps1` chaque jour à 7h30 et 12h30 (rattrapée si PC éteint), fin le 2027-06-30, auto-suppression le lendemain. Le site reste en ligne après. Journal : `tools/maj.log`. Essai manuel : résultat 0, « aucun changement ». Cron GitHub retiré (inutile).
 2. Vérifier « Maintenant » un jour de cours ; rendu sur vrai téléphone.
