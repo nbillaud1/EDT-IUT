@@ -19,6 +19,11 @@ Mis à jour : 2026-11-22
 - Le serveur edt-iut-info.unilim.fr ne répond pas aux machines de GitHub (délai dépassé, 2 essais) : le workflow garde `site/data.json` du dépôt. Mise à jour depuis le PC : `powershell -File tools\maj.ps1` (relit, commit, push).
 - Workflow en 2 jobs (build, deploy) : le déploiement en un seul job ne trouvait pas l'artefact.
 
+## 2026-11-24 : nouvelle mise en page des PDF (« régénéré à partir des ICS »)
+- Cassait la lecture sans erreur (13 salles au lieu de 16) : textes placés par BT/Td, page tournée par cm, une seule bande pour les jours, CM sur 3 lignes (Module - Intitulé / Prof / Salle).
+- Corrigé dans `tools/edt.py` (les deux mises en page sont lues) ; contrôles stricts : texte hors case, jour introuvable, horaire hors 8h-19h30 -> erreur, rien n'est écrit ni publié.
+- Test : `tests/fixtures/A2_S13_ics.pdf` ajouté. Vérifié à l'œil : A1 S13, A2 S13, A3 S12.
+
 ## Suite
 1. (fait 2026-11-22, accord utilisateur) Tâche planifiée Windows « EDT-IUT mise a jour » : `tools/maj.ps1` chaque jour à 7h30 et 12h30 (rattrapée si PC éteint), fin le 2027-06-30, auto-suppression le lendemain. Le site reste en ligne après. Journal : `tools/maj.log`. Essai manuel : résultat 0, « aucun changement ». Cron GitHub retiré (inutile).
 2. Vérifier « Maintenant » un jour de cours ; rendu sur vrai téléphone.

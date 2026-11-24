@@ -1,4 +1,5 @@
-"""python -I tests/test_edt.py  — vérifie la lecture d'un vrai PDF (A1, semaine 13, copié le 2026-11-22)."""
+"""python -I tests/test_edt.py  — vérifie la lecture de vrais PDF : ancienne mise en page (A1 S13, 2026-11-22)
+et nouvelle « régénérée à partir des ICS » (A2 S13, 2026-11-24)."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
@@ -18,4 +19,16 @@ assert len(w["events"]) == 84, len(w["events"])
 assert ("LUNDI", 480, 600, "108") in ev
 assert ("LUNDI", 810, 930, "R52") in ev
 assert ("LUNDI", 1050, 1170, "104") in ev
+# Nouvelle mise en page : CM sur 3 lignes (Module - Intitulé / Prof / Salle), créneaux d'1 h 30, page tournée.
+w = edt.parse_pdf((Path(__file__).parent / "fixtures" / "A2_S13_ics.pdf").read_bytes())
+assert (w["num"], w["start"]) == (13, "2026-11-30"), w
+ev = {(d, s, e, r) for d, s, e, r, _ in w["events"]}
+assert len(w["events"]) == 29, len(w["events"])
+# Lus à la main dans le PDF :
+assert ("LUNDI", 600, 720, "R46") in ev          # R3.11 Droit du numérique, salle sur la 3e ligne
+assert ("LUNDI", 810, 930, "112") in ev          # S3.01A en 111-2
+assert ("JEUDI", 810, 900, "R47") in ev          # R3.10 de 13h30 à 15h00
+assert ("JEUDI", 900, 1020, "105") in ev         # R3.14 de 15h00 à 17h00
+assert ("MARDI", 480, 600, None) in ev           # R3.04 salle « . »
+assert ("VENDREDI", 930, 1050, "111") in ev
 print("ok")

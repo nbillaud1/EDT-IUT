@@ -41,27 +41,35 @@ def _pt(x, y, m):
 
 
 def _shapes(reader):
-    """Rectangles remplis (x0, x1, y0, y1) et textes (x, y, str) du dessin de la page."""
+    """Rectangles remplis de couleur (x0, x1, y0, y1) et textes (x, y, str) du dessin de la page.
+    Les rectangles blancs (cases vides de la grille) sont ignorés."""
     page = reader.pages[0]
     xobjs = page["/Resources"].get("/XObject", {})
     streams = [xobjs[k].get_object() for k in xobjs] or [page.get_contents()]
     fills, texts = [], []
     for st in streams:
-        ctm, stack, pts, tm = [1, 0, 0, 1, 0, 0], [], [], [1, 0, 0, 1, 0, 0]
+        ctm, stack, pts, tm, color = [1, 0, 0, 1, 0, 0], [], [], [1, 0, 0, 1, 0, 0], (0, 0, 0)
         for args, op in ContentStream(st, reader).operations:
             if op == b"q": stack.append(ctm[:])
             elif op == b"Q": ctm = stack.pop() if stack else [1, 0, 0, 1, 0, 0]
-            elif op == b"cm": ctm = _mul([float(a) for a in args], ctm)
+            elif op == b"cm":
+                m = [float(a) for a in args]
+                if m[0] == 0 and m[3] == 0:
+                    continue  # rotation qui met la page en paysage : on lit le dessin non tourné (heures sur l'axe x)
+                ctm = _mul(m, ctm)
+            elif op in (b"rg", b"sc", b"scn") and len(args) == 3: color = tuple(float(a) for a in args)
+            elif op == b"g": color = (float(args[0]),) * 3
             elif op in (b"m", b"l"): pts.append(_pt(float(args[0]), float(args[1]), ctm))
             elif op == b"re":
                 x, y, w, h = (float(a) for a in args)
                 pts += [_pt(x, y, ctm), _pt(x + w, y + h, ctm)]
-            elif op in (b"f", b"f*", b"F", b"B", b"b"):
-                if pts:
+            elif op in (b"f", b"f*", b"F", b"B", b"B*", b"b", b"b*"):
+                if pts and min(color) < 0.99:
                     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
                     fills.append((min(xs), max(xs), min(ys), max(ys)))
                 pts = []
             elif op in (b"S", b"s", b"n"): pts = []
+            elif op == b"BT": tm = [1, 0, 0, 1, 0, 0]  # chaque bloc de texte repart de l'origine
             elif op == b"Tm": tm = [float(a) for a in args]
             elif op == b"Td": tm = tm[:4] + [tm[4] + float(args[0]), tm[5] + float(args[1])]
             elif op == b"Tj":
@@ -79,38 +87,64 @@ def parse_pdf(data):
     if not header:
         raise ValueError("en-tête de semaine introuvable")
     # Axe des heures : libellés « 8:00 », « 8:30 »… alignés sur une ligne -> x de chaque demi-heure.
-    ticks = sorted({(round(x, 1), s.strip()) for x, _, s in texts if re.fullmatch(r"\s*\d{1,2}:\d\d", s)})
+    tick_txt = [(x, y, s.strip()) for x, y, s in texts if re.fullmatch(r"\s*\d{1,2}:\d\d", s)]
+    ticks = sorted({(round(x, 1), s) for x, _, s in tick_txt})
     if len(ticks) < 2:
         raise ValueError("axe des heures introuvable")
     (x0, t0), (x1, t1) = ticks[0], ticks[1]
+    tick_y = max(y for _, y, _ in tick_txt)
     to_min = lambda t: int(t.split(":")[0]) * 60 + int(t.split(":")[1])
     step = x1 - x0  # largeur d'une demi-heure
-    # Le libellé est décalé dans sa case : la case de t0 commence à la fin de la colonne des groupes.
-    left = min((f[0] for f in fills if abs(f[1] - f[0] - step) < 1 and f[0] < x0 <= f[1]), default=x0)
+    # Le libellé est décalé dans sa case : le bord gauche de la grille est le bord du rectangle d'en-tête qui le contient.
+    left = max((f[0] for f in fills if f[0] < x0 <= f[0] + step and f[2] <= tick_y <= f[3]), default=None)
+    if left is None:
+        raise ValueError("bord gauche de la grille introuvable")
     minute_at = lambda x: to_min(t0) + round((x - left) / step * 30 / 15) * 15
-    # Bandes des jours : rectangles qui contiennent le libellé LUNDI, MARDI…
+    # Jours : libellés LUNDI, MARDI… Ancienne mise en page : un rectangle par jour ; nouvelle : une seule
+    # bande pour tous les jours, de hauteur égale -> on prend le libellé le plus proche.
+    labels = {s.strip(): y for x, y, s in texts if s.strip() in DAYS and x < left}
+    if len(labels) < 5:
+        raise ValueError(f"jours introuvables ({sorted(labels)})")
     bands = {}
+    for d, y in labels.items():
+        cand = [f for f in fills if f[1] < left + 1 and f[2] <= y <= f[3]]
+        if cand:
+            bands[d] = max(((f[2], f[3]) for f in cand), key=lambda b: b[1] - b[0])
+    if len(set(bands.values())) < len(labels):
+        bands = None
+
+    def day_of(cy):
+        if bands:
+            return next((d for d, (lo, hi) in bands.items() if lo <= cy <= hi), None)
+        return min(labels, key=lambda d: abs(labels[d] - cy))
+
+    # Chaque cours est un rectangle de couleur ; ses lignes de texte sont lues ensemble, de haut en bas :
+    # « Module - Prof - Salle » sur une ligne, ou « Module - Intitulé » / « Prof » / « Salle » sur trois.
+    in_grid = lambda x, y: x >= left - 1 and y < tick_y - 1
+    boxes = {}
     for x, y, s in texts:
-        if s.strip() in DAYS:
-            cand = [f for f in fills if f[0] <= x <= f[1] and f[2] <= y <= f[3] and f[1] < left + 1]
-            if cand:
-                f = max(cand, key=lambda f: f[3] - f[2])
-                bands[s.strip()] = (f[2], f[3])
+        if not s.strip() or not in_grid(x, y) or re.fullmatch(r"\s*\d{1,2}:\d\d", s):
+            continue
+        cand = [f for f in fills if f[0] - 1 <= x <= f[1] and f[2] <= y <= f[3] and f[0] >= left - 1]
+        if not cand:  # intitulé long qui déborde sous sa case : on le rattache à la case juste au-dessus
+            below = [f for f in fills if f[0] - 1 <= x <= f[1] and 0 < f[2] - y <= step / 2 and f[0] >= left - 1]
+            cand = [min(below, key=lambda f: f[2] - y)] if below else []
+        if not cand:
+            raise ValueError(f"texte hors d'une case de cours : {s.strip()!r}")
+        boxes.setdefault(min(cand, key=lambda f: (f[1] - f[0]) * (f[3] - f[2])), []).append((y, s.strip()))
     events = []
-    for x, y, s in texts:
-        m = COURSE.match(s)
-        if not m:
-            continue
-        boxes = [f for f in fills if f[0] - 1 <= x <= f[1] and f[2] <= y <= f[3] and f[0] >= left - 1]
-        if not boxes:
-            continue
-        b = min(boxes, key=lambda f: (f[1] - f[0]) * (f[3] - f[2]))
-        cy = (b[2] + b[3]) / 2
-        day = next((d for d, (lo, hi) in bands.items() if lo <= cy <= hi), None)
-        if day is None:
-            continue
-        for room in split_rooms(m.group(3)):
-            events.append((day, minute_at(b[0]), minute_at(b[1]), room, m.group(1)))
+    for b, lines in boxes.items():
+        lines = [s for _, s in sorted(lines, reverse=True)]
+        m = next((m for s in lines if (m := COURSE.match(s))), None)
+        if m:
+            module, code = m.group(1), m.group(3)
+        else:
+            module, code = lines[0].split(" - ")[0], (lines[-1] if len(lines) >= 3 else ".")  # salle = dernière ligne
+        day, start, end = day_of((b[2] + b[3]) / 2), minute_at(b[0]), minute_at(b[1])
+        if day is None or not (8 * 60 <= start < end <= 19 * 60 + 30):
+            raise ValueError(f"cours mal placé : {lines} ({day}, {start}-{end} min)")
+        for room in split_rooms(code):
+            events.append((day, start, end, room, module))
     fmt = lambda d: datetime.strptime(d, "%d/%m/%Y").date().isoformat()
     return {"num": int(header.group(1)), "start": fmt(header.group(3)), "end": fmt(header.group(4)), "events": events}
 
@@ -154,6 +188,12 @@ if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "site")
     out.mkdir(parents=True, exist_ok=True)
     data = build()
+    if data["errors"] or not data["weeks"]:
+        # Mise en page inattendue : on ne publie rien plutôt que des salles fausses ; le site garde l'ancienne version.
+        print("ERREUR, rien n'est écrit :")
+        for e in data["errors"]:
+            print("  !", e)
+        sys.exit(1)
     path = out / "data.json"
     try:
         old = json.loads(path.read_text(encoding="utf-8"))
@@ -164,8 +204,4 @@ if __name__ == "__main__":
         print("emplois du temps inchangés, fichier conservé")  # évite un commit quotidien pour rien
     else:
         path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"{len(data['weeks'])} semaines, {len(data['rooms'])} salles, {len(data['errors'])} erreurs")
-    for e in data["errors"]:
-        print("  !", e)
-    if not data["weeks"]:
-        sys.exit(1)  # ne pas publier un fichier vide
+    print(f"{len(data['weeks'])} semaines, {len(data['rooms'])} salles")

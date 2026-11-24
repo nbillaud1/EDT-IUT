@@ -10,7 +10,7 @@ try {
     git diff --quiet -- site/data.json
     if ($LASTEXITCODE -eq 0) { Write-Host "Aucun changement dans les emplois du temps."; exit 0 }
     git add site/data.json
-    git commit -m "Mise à jour des emplois du temps"
+    git commit -m "Mise a jour des emplois du temps"
     git push
     if ($LASTEXITCODE -ne 0) { throw "git push a échoué (connexion GitHub ?)." }
     Write-Host "Envoyé : le site sera à jour dans 1 à 2 minutes."
